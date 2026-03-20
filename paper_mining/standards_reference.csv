@@ -1,0 +1,11 @@
+category,analyte_or_topic,excitation_range_nm,emission_range_nm,algorithm_or_context,source_type,source_note,status
+standard,glucosamine,TBD,TBD,acid pretreatment suggested in SOP notes,internal_note,Verify against literature before use,needs_review
+standard,muramic acid,TBD,TBD,bacterial necromass marker in SOP notes,internal_note,Verify against literature before use,needs_review
+standard,protein standards,TBD,TBD,important for overlap testing and calibration,internal_note,Select specific proteins from papers,needs_review
+region,bacteria-like,250-350,310-370,regional integration window,internal_note,Window captured from methodology notes,needs_review
+region,peak seed,350,450,manual peak picking seed,internal_note,Used in starter analysis code,needs_review
+region,protein-humic overlap seed,250-300,380-450,regional integration seed,internal_note,Used in starter analysis code,needs_review
+algorithm,PFFLR,TBD,TBD,standard-based quantification,internal_note,From SOP notes,needs_review
+algorithm,PLD,TBD,TBD,standard decomposition with background handling,internal_note,From SOP notes,needs_review
+algorithm,MR-PLD,TBD,TBD,combined protein and saccharide handling,internal_note,From SOP notes,needs_review
+algorithm,SOM,TBD,TBD,unsupervised mapping of EEM data,internal_note,From SOP notes,needs_review

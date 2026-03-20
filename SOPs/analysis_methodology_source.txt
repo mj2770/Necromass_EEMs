@@ -1,0 +1,314 @@
+3/16/2025 Minxi/Yongmin
+	•	Algorithms and parameters in the modeling 
+	•	Data input minimal set requirements
+	•	Variation is more important than data size, typically 20 samples within one cluster is god 
+	•	They just update the package and Minxi will send Yongmin the script for checking 
+	•	Showed Yongmin our plots: he think maybe our concentration is very low, suggest us to include more integration times 4s 
+	•	They update the physical assumption of Parafac (casset)
+	•	Quantitative analysis and standard suggestions
+	•	Different proteins might be hard to distinguish (high resolution might needed), there might be a lot of overlapping and spectrum shift might be limited
+	•	They suggest a general differentiate between protein, cell, humic acid is good 
+	•	Adding quencher 
+
+Bacteria and background protein （treptophi） overlapping
+
+Different proteins have less difference (might be hard to distinguish)
+
+Spectrum shift might be few, 
+
+Isolate might be hard from algorithms
+
+Protein v.s. 
+
+Resolution limitations 
+
+Cell v.s. Protein v.s. Humic acid 
+
+
+Standards recommendation and standard-based analysis algorithms 
+Remove background 
+
+My cluster doesn’t make biological sense why? 
+
+Key idea of quenching: compare the ratio before and after quecning fmax, if the background or the compounds composition already changed, or different compounds overlap with each other to creat similar EEMs, so adding this quenching as a separate factor to distinguish different compounds mixture 
+ He test E.coli and BSA mixing ratio and see different F0/F
+Added humic acid and see the change of F0/F due to humic acid addition, 
+
+How to train our model, whether his trained model can be used for our sample or we need to retrain model 
+
+Flag the outliers (based on historical samples F0/F ratios) 
+
+
+Questions towards K-parafac 
+	•	Preprocessing step (I use Yongmin’s script for this default function) 
+	•	What is IFE (inner filter effect) and how could I measure it (through the absorbance) 
+	•	Parameter selection for rayleigh_scattering removal (how to corresponding this to the experiment data) 
+	•	No for Rayleigh I select width 10, 10, linear, for raman I select width 5 and linear 
+	•	Interpolation method (how to fill masked rayleigh bands), I select linear here but the author use zero 
+	•	Raman scattering I also use linear the author use zero 
+	•	Cutting: the cutting will impact my final results 
+	•	Peak picking and regional integration
+	•	Is this more useful for our standard? 
+	•	Besides sum, there’s other fluorescence indicators including HIX, BIX, FI, AQY and total fluorescence
+	•	Parafac analysis (I use eem-processing PARAFAC and SplitValidation, not the K-Parafac for now) 
+	•	Parameter used:
+	•	Solver use hals (recommended solver) SVD-based initialization 
+	•	Max iter nnls and max iter_als (use the default): This will influencing the computation time/accuracy
+	•	Random_state: random seed 
+	•	Questions:
+	•	Ratio constraint on paired rows of sample scores: (I don’t understand this part, this seems to came from his new paper) 
+
+	•	Updated Bri
+
+
+
+
+
+
+
+
+
+Kmethod analysis 
+	•	Overall view: Clustering algorithm for EEM datasets by leveraging PARAFAC and NMF-type models as base models inside each cluster
+	•	Cluster EEMs samples so that each cluster have one PARAFAC model (instead of a global model for all samples) 
+	•	Iteratively alternates
+	•	Estimation: fit a base model first separately in each cluster
+	•	Assignmnet: reassign each sample to the cluster whose model best explains it lowest distance/error
+	•	Repeats base clustering with subsampling to build a consensus matrix indicating how often sample pairs co-cluster 
+	•	Use hierarchical clustering on the consensus-derived distance matrix to produce a final clustering and final cluster-specific PARAFAC models 
+	•	Predict method: assign any new EEMs data to the existing cluster-specific models 
+	•	Classes and functions defined in kmethod.py
+	•	__init__(self, base_model, n_initial_splits, distance_metric="reconstruction_error", max_iter=20, tol=0.001, elimination='default')
+	•	base_clustering(self, eem_dataset: EEMDataset)
+	•	calculate_consensus(self, eem_dataset: EEMDataset, n_base_clusterings: int, subsampling_portion: float)
+	•	hierarchical_clustering(self, eem_dataset, n_clusters, consensus_conversion_power=1)
+	•	predict(self, eem_dataset: EEMDataset)
+                 Notes: inside base_clustering (several local helper functions), e.g. 
+	•	 Get_quenching_coef (fmax_tot, kw_o, kw_q)
+	•	Estimation (sub_dataasets: dict)
+	•	Maximization
+	•	Model_similarity
+	•	Per function (API)
+           Class KMethod (this is an overall class)
+	•	Input:
+	•	Base_model: PARAFAC or EEMNMF this is the unfitted decomposition model 
+	•	N_initial_splits: how many random splits to creat at initialization 
+	•	Distance_metric: either reconstruction_error, reconstruction_error_with_beta, or quenching_coefficient (how to measure distance for assigning samples to clusters)
+	•	Max_iter: maximum iterations for a single base clustering run 
+	•	Tol: convergence tolerance on average component similarity between successive iterations
+	•	Elimination: minimum cluster size (smaller clusters are eliminated during iteration)
+	•	Main attributes sets: 
+	•	basic configuration including base_model, n-initialsplits, distance, tol (stop interaction when converge), elimination 
+	•	Consensus: subsampling, consensus_conversion_power
+	•	Model outputs
+	•	Unified_model (single model on full dataset used as reference)
+	•	Kw_top, kw_bot
+	•	Label and error history
+	•	Silhouette score (cluster quality evaluation)
+	•	Labgels
+	•	Index
+	•	Threshold
+	•	Eem_cluster (per-cluster EEMDataset)
+	•	Cluster_specific_models
+	•	Consensus_matrix, distance_matrix, linkage_matrix
+	•	External dependencies
+	•	EEMDataset, combine_eem_datasets, from .eem_dataset
+	•	Component_similarity, align_components_by_components from .basic
+	•	PARAFAC from .parafac
+	•	EEMNMF from .eemnmf
+	•	Third-party
+	•	Numpy. Pandas, sklearn>metrix.silhouette_score, scipy.cluster.hierarchy, linkage, scipy.spatial.distance.squreform, others
+ KMethod.base_clustering
+	•	Purpose: run the cluster once to obtain the cluster labels, per-iteration histories and cluster-specific models, guess an initial grouping, fit one model per group, test every sample against every group-model, move each sample to the group whose model fits it best, repeat until the clustering becomes stable
+	•	Input:
+	•	Eem_dataset: including eem_stack(3S array), sample index, splitting N#, subsampling (used indirectly via calculate consensus), ex and em range,
+	•	Outputs:
+	•	cluster_labels : final cluster assignment for each sample
+	•	Label_histroy, error history
+	•	Key steps and logic of the function
+	•	Fit a global model to the whole dataset: baseline comparison, also to find the unified component, because after separately fit, component 1 in cluster A might actually be component 2 in cluster B, so global model gives common reference frame
+	•	Initial guess of clustering: either random splits or based on quenching pairs 
+	•	Fit one model per cluster: copy the base model and fit for each cluster
+	•	Test every sample against every cluster-model and calculate the error, assign samples to the cluster that the fitted model gives the smallest error
+	•	Regroup the samples 
+	•	Remove clusters that are too small (removed undersized clusters)
+	•	Align components across cluster models: align components 1 in cluster A to component 2 in cluster B
+	•	Check the converged clustering
+	•	Stop iterating if samples are assigned to the same clusters or if the models from each cluster is similar between each iterations
+	•	Distance_metric to evaluate the fit quality 
+	•	Reconstruction_error: reconstruct EEM, and this algorithm measures how different the reconstruction is from the actual sample 
+	•	Reconstruction_error_with_beta: this is to handle the quenced/unquenched samples
+	•	Quenching_coefficient: compares quenching-related coefficient to estimated from paired samples
+	•	Other functions
+	•	Get_quenching_coef: compare quenching and unquenching sample ratios
+	•	Maximization: assign samples to best-fitting cluster
+	•	Model_similarity: compare model across iterations using component similarity
+
+KMethod.calculate_consensus
+	•	Purpose: run clustering runs on subsamples and accumulate co-occurrence statistics and build a consensus matrix telling how often pairs of samples end up in the same cluster. Instead of asking what cluster is sample A, asking across repeated runs, how stable it is when sample A and sample B are in the same cluster
+	•	Logic for doing this: cluster can be impacted by random initialization, subsampling, small data differences, so instead of just run one time, it reperates clustering many times to build a consensus matrix
+	•	Input: eem_dataset, n_base_clustering, subsampling_portion (fraction of samples to retain in each subsample)
+	•	Outputs: consensus_matrix, label history and error history
+	•	This will be a value of sample pairs = 1: always cluster together, near 0: never clustered together
+	•	Consensus = times clustered together / total observation time 
+	•	Key steps
+	•	Create two empty counting matrices: one for co-occurence matrix, count for times that sample pairs are split into a same subsample, one for label matrix counting how many times sample pairs are clustered together finally
+	•	Repeat subsample + clustering many times: 
+	•	Random subset
+	•	Run base_clustering on that subset
+	•	Update the pairwise counts
+	•	Update pairwise counts
+	•	Make sure coverage is enough: check whether some sample pairs never observed together
+	•	Compute the consensus matrix
+
+KMethod.hierarchical_clustering
+	•	Purpose: Take the consensus matrix from calculate_consensus and convert it into distance matrix run hierarchical clustering and then assign a final cluster labels, reorder indices, fit final cluster-specific base models
+	•	Input: eem_dataset, nclusters (cut from the dendrogram), consensus_conversion_power: power factor in distance conversion
+	•	Note this function does not automatically decide number of clusters, this is decide by user to tell ???? Why
+	•	Outputs: distance_matrix, linkage_matrix, silhouette_score, eem_clusters, cluster_specific_models, labels, ref_sorted, idnex_sorted, concensus_matrix_sorted
+	•	Key steps and logics
+	•	Convert the consensus matrix through conversion power, if co-occurance is high (close to 1), then Distance is low 
+
+	•	Run hierarchical clustering
+	•	This will show how sample clustered, this code use complete linkage method: when comparing two candidate clusters, they looks at largest distance between members across two clusters
+	•	Cut tree into a fixed number of clusters
+	•	After dendrogram is build, buts it into n_culster groups 
+	•	Determine the cut threshold
+	•	Calculate the linkage distance corresponding to the cut and store as treshold_r. At what three height we cut the hierarchy to get the chosen number of clusters
+	•	Reorder sample to final sets
+	•	Compute the silhouette score 
+	•	Values decide how well-separated the final clusters are 
+	•	Build final cluster:
+	•	Extract EEM samples and matching metadata to each cluster
+	•	Fit final models for each cluster 
+
+KMethod.predict
+	•	Purpose: given the trained KMethod with cluster_specific_models, fit each cluster-specific model to all input EEMs or chosen samples 
+	•	Input: eem_dataset
+	•	Output: best_model_label (which model is used for this sample), score_all (the score for each model from this sample), fmax_all output the fmax values from the model, sample_error: RMSE for each sample under each model
+	•	Key steps and logics
+	•	Start empty dataframe
+	•	Loop through the sample over different cluster and model, compute score, fmax, reconstructed EEMs 
+	•	Residual calculation: observed EEM - reconstructed EEM and compute the RMSE
+	•	Convert everythin into dataframe
+	•	Choose best model for each sample
+          
+
+QUestions
+	•	To bri
+	•	Where are all T3 samples, also where are the measured standards
+	•	Where are the anthro1 means, some of them missing the oxygen conditions 
+	•	Did she measure the inner filter effect was corrected using the absorbance-based method (Kothawala et al., 2013)
+	•	To wyoming
+	•	Fluorescence intensities were smoothed using a 2D Gaussian filter and normalized using the Raman scattering peak at the emission wavelength of 350 nm in the blank samples
+	•	integrating the fluorescence intensity over the region covering the fluorescence signal of bacteria (λexcitation/ λemission  [250, 350] / [310, 370] nm, Supporting information S2), (I could also do this if I know the standards regions?)
+	•	The unified PARAFAC model refers to the PARAFAC model established on an entire EEM dataset without considering potential component shifts. Two unified PARAFAC models were established on P1 and P2 respectively (Table 2). PARAFAC was conducted by adopting the python package Tensorly (Kossaifi et al., 2019). The EEM dataset was represented by components (the vector outer product of excitation and emission loadings) and scores. The optimal number of components for the PARAFAC model was four according to variance explained and core-consistency (Bro and Kiers, 2003). The reconstruction error of each EEM was determined by calculating the reconstruction error.
+
+After a unified PARAFAC model was established, the Fmax of each component was calculated by multiplying the component score with the maximum excitation and emission loadings (Murphy et al., 2011). 
+
+Among the four components (C1, C2, C3 and C4), C1 is the only component that highly overlaps with the fluorescence fingerprint of bacteria, and its Fmax also exhibited the highest positive Pearson correlation coefficient with TCC.
+
+	•	Paper to read
+https://www.sciencedirect.com/science/article/pii/S0043135424015033
+While Excitation-Emission Matrix (EEM) fluorescence spectroscopy—paired with Parallel Factor Analysis (PARAFAC)—is a powerful laboratory tool for tracking dissolved organic matter (DOM) and microbial quality, its robustness in real-time, online environments is unverified
+
+Overall workflow from this paper
+	•	Bacteria-like fluorescence metric
+	•	PARAFAC components using two strategies
+	•	Unified Parafact: one model for whole datasets
+	•	Cluster-specific parafac: different models for different types of EEMs
+	•	Build the model
+	•	Two unified models separately for P1 and P2 
+	•	Run parafac using Tensorly (python)
+	•	Parafac decompose the EEM dataset into components and score per sample (how much of each component is present)
+	•	Choose number of components 
+	•	Reconstruction error calculation 
+	•	Compute Fmax for each components = component score * max excitation loading * max emission loading 
+
+
+
+Traditional steps for EEMs
+	•	Read the standard output csv files
+	•	Remove the background (just water samples) 
+	•	Correst instrument response (raw intensity can be wave length biased
+	•	Scatter removal /masking: Correct with Raman (inelastic scatter from water) and Rayleigh (elastic scatter)
+	•	This will mask the scatter bands (set to NA) usually +-10-20nm around the band
+	•	Inner filter effect correction 
+	•	If the sample absorbs light strongly, fluorescence gets distorted, excitation is attenuated on the way in while emitted light is re-absorbed on the way out
+	•	Standard approach is to measure UV-Vis and apply an IFE correction to calculate the F_corrected
+	•	Normalize intensities (raman normalization) 
+	•	Convert the intensity ro Raman units by normalizeing to the area or height of the water Raman peak
+	•	This is to enabling data comparable across days/instruments/settings
+	•	Find the peak and the region by set-up a number of components then trial and error to see the figures of lines of Excitation and emission 
+	•	Traditional methods:
+	•	Peak regions (fixed windows) picking (those Humic-like and protein-like regions defined by a Ex/Em windows
+	•	Manual peak could inject error or overlap when multiple flurophores contribute 
+	•	Calculate indices: such as FI fluorescence index, BIX, HIX
+	•	Report the peak intensities (integrated region intensities)
+	•	Parafac
+	•	Prepare a 3D array with Samples X emission X excitation
+	•	Choose candidate component numbers (2-8)
+	•	Fit Parafac models and evaluate:
+	•	residuals/explained variance
+	•	Interpretability of component spectra
+	•	stability/uniqueness
+	•	Validation test
+	•	Split-half analysis
+	•	Split samples into halves, fit models check whether cmoponents match across splits
+	•	Calculate the Fmax of each samples 
+	•	Estimated maximum fluorescence of a component for each sample (regard as the amount) 
+
+
+
+Each step of the python script 
+	•	STEP 1: Read_eem_table:
+	•	 read one EEM into a 2D matrix, one for ex one for em
+	•	Reads the remaining numeric grid as intensity
+	•	Converts Nan into 0 
+	•	Clamps negative to 0 
+	•	STEP 2: find all files, read all EEMs, enforce identical wave length grids, stack into 3D matrix
+	•	List all Data_*.csv
+	•	Remove one bad file because it has a different emission grid 
+	•	Check all samples have same Ex and Em arrays 
+	•	Read every remaining file into (n_ex, n_em) EEM matrix
+	•	Stacks into eem_stack shape = (n_samples, n_ex, n_em)
+	•	Wraps all into EEMDataset: adding wavelength axes and sample IDs
+	•	STEP 3: Rayleigh removal and Raman removal and cutting is to cropping the EEM wavelength domain to a smaller rectangle
+	•	I didn’t do the IFE (inner filter effect) correction, which need absorbance data from samples 
+	•	STEP 4: Optional peak picking
+	•	Set up a coordinate, and get the intensity per sample at that coordinate Then do manual regional integration 
+	•	Creat a rectangle and extracts taht block for each sample, sums all intensity values in that block [Note: this is not the Fmax]
+	•	Build a metrix table, to select the rectangular and with peak intensity at an specific coordinate, then log transform, then calculate regional means instead of sum 
+	•	STEP 5: Fit the unified parafac model 
+	•	One single parafac model fit to the entire dataset at once, so all samples share the same component spectral shapes, only the per-sample scores vary 
+	•	STEP 6: Split validation 
+	•	Split half, fit parafac models on each subset
+	•	Compares whether the derived loadings are similar across splits
+	•	If same components appear in different subsets—> more trustworthy, otherwise compoenent count too high or data unstable 
+	•	STEP 7: plotting what each figure represents 
+	•	Raw EEM vs processed EEM
+	•	plot _fi(peak_fi), plot per-sample peak intensities 
+	•	plot_loadings ({“PARAFAC”: parafac})
+	•	This plot the excitation loading curve and emission loading curve (Ex v.s. Em spectrum)
+	•	STEP 9: extract scores/loadings + compute Fmas per component per sample
+	•	Scores = per sample component abundance 
+	•	ex-Load and em_load is spectral shapes
+	•	This will produces a Fmas-table 
+
+Some missing steps: IFE correction, inner filter effect, Raman normalization to Raman units
+
+
+Identifying the DOC composition of groundwater with PARAFAC modelling
+
+
+	•	Excitation spectrum reflects which wavelengths are good at absorbing (populating excited states). 
+	•	Emission spectrum reflects the light emitted from S₁ → S₀, which is largely independent of how you got to S₁. 
+This is also why emission is typically red-shifted relative to excitation — called the Stokes shift.
+
+
+
+
+
+Criteria >95%
+
+
